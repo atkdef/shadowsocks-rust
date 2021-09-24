@@ -1,12 +1,18 @@
 # shadowsocks
 
+This fork aims to enable all the ciphers supported
+
+**USING INSECURE (STREAM) CIPHERS IS HIGHLY DISCOURAGED**
+
+**IT'S AT YOUR OWN RISK TO DO SO**
+
 [![License](https://img.shields.io/github/license/zonyitoo/shadowsocks-rust.svg)](https://github.com/zonyitoo/shadowsocks-rust)
-[![Build & Test](https://github.com/shadowsocks/shadowsocks-rust/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/shadowsocks/shadowsocks-rust/actions/workflows/build-and-test.yml)
-[![Build Releases](https://github.com/shadowsocks/shadowsocks-rust/actions/workflows/build-release.yml/badge.svg)](https://github.com/shadowsocks/shadowsocks-rust/actions/workflows/build-release.yml)
-[![Build Nightly Releases](https://github.com/shadowsocks/shadowsocks-rust/actions/workflows/build-nightly-release.yml/badge.svg)](https://github.com/shadowsocks/shadowsocks-rust/actions/workflows/build-nightly-release.yml)
+[![Build & Test](https://github.com/atkdef/shadowsocks-rust/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/atkdef/shadowsocks-rust/actions/workflows/build-and-test.yml)
+[![Build Releases](https://github.com/atkdef/shadowsocks-rust/actions/workflows/build-release.yml/badge.svg)](https://github.com/atkdef/shadowsocks-rust/actions/workflows/build-release.yml)
+[![Build Nightly Releases](https://github.com/atkdef/shadowsocks-rust/actions/workflows/build-nightly-release.yml/badge.svg)](https://github.com/atkdef/shadowsocks-rust/actions/workflows/build-nightly-release.yml)
 
 [![crates.io](https://img.shields.io/crates/v/shadowsocks-rust.svg)](https://crates.io/crates/shadowsocks-rust)
-[![Release](https://img.shields.io/github/release/shadowsocks/shadowsocks-rust.svg)](https://github.com/shadowsocks/shadowsocks-rust/releases)
+[![Release](https://img.shields.io/github/release/shadowsocks/shadowsocks-rust.svg)](https://github.com/atkdef/shadowsocks-rust/releases)
 [![archlinuxcn shadowsocks-rust-git](https://img.shields.io/badge/dynamic/json?label=archlinuxcn-git&query=%24.latest.pkgver&url=https%3A%2F%2Fbuild.archlinuxcn.org%2Fapi%2Fpackages%2Fshadowsocks-rust-git)](https://build.archlinuxcn.org/)
 [![archlinuxcn shadowsocks-rust-opt-git](https://img.shields.io/badge/dynamic/json?label=archlinuxcn-opt-git&query=%24.latest.pkgver&url=https%3A%2F%2Fbuild.archlinuxcn.org%2Fapi%2Fpackages%2Fshadowsocks-rust-git)](https://build.archlinuxcn.org/)
 
@@ -76,7 +82,7 @@ then you can find `sslocal` and `ssserver` in `$CARGO_HOME/bin`.
 
 ### **Download release**
 
-Download static-linked build [here](https://github.com/shadowsocks/shadowsocks-rust/releases).
+Download static-linked build [here](https://github.com/atkdef/shadowsocks-rust/releases).
 
 * `build-windows`: Build for `x86_64-pc-windows-msvc`
 * `build-linux`: Build for `x86_64-unknown-linux-gnu`, Debian 9 (Stretch), GLIBC 2.18
@@ -139,7 +145,7 @@ make install TARGET=release
 
 Then `sslocal`, `ssserver`, `ssmanager` and `ssurl` will be installed to `/usr/local/bin` (variable PREFIX).
 
-For Windows users, if you have encountered any problem in building, check and discuss in [#102](https://github.com/shadowsocks/shadowsocks-rust/issues/102).
+For Windows users, if you have encountered any problem in building, check and discuss in [#102](https://github.com/atkdef/shadowsocks-rust/issues/102).
 
 ### **target-cpu optimization**
 
