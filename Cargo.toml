@@ -57,6 +57,8 @@ default = [
     "local-tunnel",
     "local-socks4",
     "multi-threaded",
+    "stream-cipher",
+    "aead-cipher-extra",
 ]
 
 # Enable local server
