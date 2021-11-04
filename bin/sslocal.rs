@@ -4,7 +4,7 @@
 //! or you could specify a configuration file. The format of configuration file is defined
 //! in mod `config`.
 
-use std::{net::IpAddr, process, time::Duration};
+use std::{net::IpAddr, path::PathBuf, process, time::Duration};
 
 use clap::{clap_app, Arg, Error as ClapError, ErrorKind as ClapErrorKind};
 use futures::future::{self, Either};
@@ -18,7 +18,8 @@ use shadowsocks_service::shadowsocks::relay::socks5::Address;
 use shadowsocks_service::{
     acl::AccessControl,
     config::{Config, ConfigType, LocalConfig, ProtocolType},
-    run_local,
+    create_local,
+    local::loadbalancing::PingBalancer,
     shadowsocks::{
         config::{Mode, ServerAddr, ServerConfig},
         crypto::v1::{available_ciphers, CipherKind},
@@ -78,6 +79,7 @@ fn main() {
             (@arg OUTBOUND_RECV_BUFFER_SIZE: --("outbound-recv-buffer-size") +takes_value {validator::validate_u32} "Set outbound sockets' SO_RCVBUF option")
 
             (@arg OUTBOUND_BIND_ADDR: --("outbound-bind-addr") +takes_value alias("bind-addr") {validator::validate_ip_addr} "Bind address, outbound socket will bind this address")
+            (@arg OUTBOUND_BIND_INTERFACE: --("outbound-bind-interface") +takes_value "Set SO_BINDTODEVICE / IP_BOUND_IF / IP_UNICAST_IF option for outbound socket")
         );
 
         // FIXME: -6 is not a identifier, so we cannot build it with clap_app!
@@ -113,15 +115,7 @@ fn main() {
         #[cfg(any(target_os = "linux", target_os = "android"))]
         {
             app = clap_app!(@app (app)
-                (@arg OUTBOUND_BIND_INTERFACE: --("outbound-bind-interface") +takes_value "Set SO_BINDTODEVICE option for outbound socket")
                 (@arg OUTBOUND_FWMARK: --("outbound-fwmark") +takes_value {validator::validate_u32} "Set SO_MARK option for outbound socket")
-            );
-        }
-
-        #[cfg(any(target_os = "macos", target_os = "ios"))]
-        {
-            app = clap_app!(@app (app)
-                (@arg OUTBOUND_BIND_INTERFACE: --("outbound-bind-interface") +takes_value "Set IP_BOUND_IF option for outbound socket")
             );
         }
 
@@ -413,7 +407,6 @@ fn main() {
             config.outbound_fwmark = Some(mark.parse::<u32>().expect("an unsigned integer for `outbound-fwmark`"));
         }
 
-        #[cfg(any(target_os = "linux", target_os = "android", target_os = "macos", target_os = "ios"))]
         if let Some(iface) = matches.value_of("OUTBOUND_BIND_INTERFACE") {
             config.outbound_bind_interface = Some(iface.to_owned());
         }
@@ -497,12 +490,12 @@ fn main() {
         }
 
         #[cfg(unix)]
-        if matches.is_present("DAEMONIZE") {
+        if matches.is_present("DAEMONIZE") || matches.is_present("DAEMONIZE_PID_PATH") {
             use self::common::daemonize;
             daemonize::daemonize(matches.value_of("DAEMONIZE_PID_PATH"));
         }
 
-        info!("shadowsocks {}", VERSION);
+        info!("shadowsocks local {} build {}", VERSION, common::BUILD_TIME);
 
         #[cfg(feature = "multi-threaded")]
         let mut builder = if matches.is_present("SINGLE_THREADED") {
@@ -523,8 +516,16 @@ fn main() {
     };
 
     runtime.block_on(async move {
+        let config_path = config.config_path.clone();
+
+        let instance = create_local(config).await.expect("create local");
+
+        if let Some(config_path) = config_path {
+            launch_reload_server_task(config_path, instance.server_balancer().clone());
+        }
+
         let abort_signal = monitor::create_signal_monitor();
-        let server = run_local(config);
+        let server = instance.run();
 
         tokio::pin!(abort_signal);
         tokio::pin!(server);
@@ -545,3 +546,33 @@ fn main() {
         }
     });
 }
+
+#[cfg(unix)]
+fn launch_reload_server_task(config_path: PathBuf, balancer: PingBalancer) {
+    use log::error;
+    use tokio::signal::unix::{signal, SignalKind};
+
+    tokio::spawn(async move {
+        let mut sigusr1 = signal(SignalKind::user_defined1()).expect("signal");
+
+        while sigusr1.recv().await.is_some() {
+            let config = match Config::load_from_file(&config_path, ConfigType::Local) {
+                Ok(c) => c,
+                Err(err) => {
+                    error!("auto-reload {} failed with error: {}", config_path.display(), err);
+                    continue;
+                }
+            };
+
+            let servers = config.server;
+            info!("auto-reload {} with {} servers", config_path.display(), servers.len());
+
+            if let Err(err) = balancer.reset_servers(servers).await {
+                error!("auto-reload {} but found error: {}", config_path.display(), err);
+            }
+        }
+    });
+}
+
+#[cfg(not(unix))]
+fn launch_reload_server_task(_: PathBuf, _: PingBalancer) {}

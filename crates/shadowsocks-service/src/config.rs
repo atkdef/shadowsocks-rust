@@ -41,8 +41,6 @@
 //!
 //! These defined server will be used with a load balancing algorithm.
 
-#[cfg(any(unix, target_os = "android", feature = "local-flow-stat"))]
-use std::path::PathBuf;
 use std::{
     convert::{From, Infallible},
     default::Default,
@@ -51,7 +49,7 @@ use std::{
     io::Read,
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
     option::Option,
-    path::Path,
+    path::{Path, PathBuf},
     str::FromStr,
     string::ToString,
     time::Duration,
@@ -64,7 +62,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(any(feature = "local-tunnel", feature = "local-dns"))]
 use shadowsocks::relay::socks5::Address;
 use shadowsocks::{
-    config::{ManagerAddr, Mode, ServerAddr, ServerConfig, ServerWeight},
+    config::{ManagerAddr, Mode, ReplayAttackPolicy, ServerAddr, ServerConfig, ServerWeight},
     crypto::v1::CipherKind,
     plugin::PluginConfig,
 };
@@ -81,6 +79,26 @@ enum SSDnsConfig {
     Simple(String),
     #[cfg(feature = "trust-dns")]
     TrustDns(ResolverConfig),
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+struct SSSecurityConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    replay_attack: Option<SSSecurityReplayAttackConfig>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+struct SSSecurityReplayAttackConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    policy: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default)]
+struct SSBalancerConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_server_rtt: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    check_interval: Option<u64>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -134,6 +152,10 @@ struct SSConfig {
     ipv6_first: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     fast_open: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    security: Option<SSSecurityConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    balancer: Option<SSBalancerConfig>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -519,6 +541,50 @@ impl FromStr for ManagerServerHost {
     }
 }
 
+/// Mode of Manager's server
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum ManagerServerMode {
+    /// Run shadowsocks server in the same process of manager
+    Builtin,
+
+    /// Run shadowsocks server in standalone (process) mode
+    #[cfg(unix)]
+    Standalone,
+}
+
+impl Default for ManagerServerMode {
+    fn default() -> ManagerServerMode {
+        ManagerServerMode::Builtin
+    }
+}
+
+/// Parsing ManagerServerMode error
+#[derive(Debug, Clone, Copy)]
+pub struct ManagerServerModeError;
+
+impl FromStr for ManagerServerMode {
+    type Err = ManagerServerModeError;
+
+    fn from_str(s: &str) -> Result<ManagerServerMode, Self::Err> {
+        match s {
+            "builtin" => Ok(ManagerServerMode::Builtin),
+            #[cfg(unix)]
+            "standalone" => Ok(ManagerServerMode::Standalone),
+            _ => Err(ManagerServerModeError),
+        }
+    }
+}
+
+impl Display for ManagerServerMode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            ManagerServerMode::Builtin => f.write_str("builtin"),
+            #[cfg(unix)]
+            ManagerServerMode::Standalone => f.write_str("standalone"),
+        }
+    }
+}
+
 /// Configuration for Manager
 #[derive(Clone, Debug)]
 pub struct ManagerConfig {
@@ -536,6 +602,14 @@ pub struct ManagerConfig {
     pub server_host: ManagerServerHost,
     /// Server's mode
     pub mode: Mode,
+    /// Server's running mode
+    pub server_mode: ManagerServerMode,
+    /// Server's command if running in Standalone mode
+    #[cfg(unix)]
+    pub server_program: String,
+    /// Server's working directory if running in Standalone mode
+    #[cfg(unix)]
+    pub server_working_directory: PathBuf,
 }
 
 impl ManagerConfig {
@@ -548,6 +622,14 @@ impl ManagerConfig {
             timeout: None,
             server_host: ManagerServerHost::default(),
             mode: Mode::TcpOnly,
+            server_mode: ManagerServerMode::Builtin,
+            #[cfg(unix)]
+            server_program: "ssserver".to_owned(),
+            #[cfg(unix)]
+            server_working_directory: match std::env::current_dir() {
+                Ok(d) => d,
+                Err(..) => "/tmp/shadowsocks-manager".into(),
+            },
         }
     }
 }
@@ -766,6 +848,14 @@ impl LocalConfig {
                 }
             }
 
+            #[cfg(feature = "local-http")]
+            ProtocolType::Http => {
+                if !self.mode.enable_tcp() {
+                    let err = Error::new(ErrorKind::Invalid, "TCP mode have to be enabled for http", None);
+                    return Err(err);
+                }
+            }
+
             _ => {}
         }
 
@@ -812,6 +902,26 @@ impl Default for DnsConfig {
     }
 }
 
+/// Security Config
+#[derive(Clone, Debug, Default)]
+pub struct SecurityConfig {
+    pub replay_attack: SecurityReplayAttackConfig,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct SecurityReplayAttackConfig {
+    pub policy: ReplayAttackPolicy,
+}
+
+/// Balancer Config
+#[derive(Clone, Debug, Default)]
+pub struct BalancerConfig {
+    /// MAX rtt of servers, which is the timeout duration of each check requests
+    pub max_server_rtt: Option<Duration>,
+    /// Interval between each checking
+    pub check_interval: Option<Duration>,
+}
+
 /// Configuration
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -853,8 +963,7 @@ pub struct Config {
     /// Set `SO_MARK` socket option for outbound sockets
     #[cfg(any(target_os = "linux", target_os = "android"))]
     pub outbound_fwmark: Option<u32>,
-    /// Set `SO_BINDTODEVICE` socket option for outbound sockets
-    #[cfg(any(target_os = "linux", target_os = "android", target_os = "macos", target_os = "ios"))]
+    /// Set `SO_BINDTODEVICE` (Linux), `IP_BOUND_IF` (BSD), `IP_UNICAST_IF` (Windows) socket option for outbound sockets
     pub outbound_bind_interface: Option<String>,
     /// Outbound sockets will `bind` to this address
     pub outbound_bind_addr: Option<IpAddr>,
@@ -888,6 +997,16 @@ pub struct Config {
     /// Flow statistic report Unix socket path (only for Android)
     #[cfg(feature = "local-flow-stat")]
     pub stat_path: Option<PathBuf>,
+
+    /// Replay attack policy
+    pub security: SecurityConfig,
+
+    /// Balancer config of local server
+    pub balancer: BalancerConfig,
+
+    /// Configuration file path, the actual path of the configuration.
+    /// This is normally for auto-reloading if implementation supports.
+    pub config_path: Option<PathBuf>,
 }
 
 /// Configuration parsing error kind
@@ -968,7 +1087,6 @@ impl Config {
 
             #[cfg(any(target_os = "linux", target_os = "android"))]
             outbound_fwmark: None,
-            #[cfg(any(target_os = "linux", target_os = "android", target_os = "macos", target_os = "ios"))]
             outbound_bind_interface: None,
             outbound_bind_addr: None,
             #[cfg(target_os = "android")]
@@ -990,6 +1108,12 @@ impl Config {
 
             #[cfg(feature = "local-flow-stat")]
             stat_path: None,
+
+            security: SecurityConfig::default(),
+
+            balancer: BalancerConfig::default(),
+
+            config_path: None,
         }
     }
 
@@ -1505,6 +1629,28 @@ impl Config {
             nconfig.ipv6_first = f;
         }
 
+        // Security
+        if let Some(sec) = config.security {
+            if let Some(replay_attack) = sec.replay_attack {
+                if let Some(policy) = replay_attack.policy {
+                    match policy.parse::<ReplayAttackPolicy>() {
+                        Ok(p) => nconfig.security.replay_attack.policy = p,
+                        Err(..) => {
+                            let err = Error::new(ErrorKind::Invalid, "invalid replay attack policy", None);
+                            return Err(err);
+                        }
+                    }
+                }
+            }
+        }
+
+        if let Some(balancer) = config.balancer {
+            nconfig.balancer = BalancerConfig {
+                max_server_rtt: balancer.max_server_rtt.map(Duration::from_secs),
+                check_interval: balancer.check_interval.map(Duration::from_secs),
+            };
+        }
+
         Ok(nconfig)
     }
 
@@ -1643,11 +1789,19 @@ impl Config {
     }
 
     /// Load Config from a File
-    pub fn load_from_file(filename: &str, config_type: ConfigType) -> Result<Config, Error> {
-        let mut reader = OpenOptions::new().read(true).open(&Path::new(filename))?;
+    pub fn load_from_file<P: AsRef<Path>>(filename: P, config_type: ConfigType) -> Result<Config, Error> {
+        let filename = filename.as_ref();
+
+        let mut reader = OpenOptions::new().read(true).open(filename)?;
         let mut content = String::new();
         reader.read_to_string(&mut content)?;
-        Config::load_from_str(&content[..], config_type)
+
+        let mut config = Config::load_from_str(&content[..], config_type)?;
+
+        // Record the path of the configuration for auto-reloading
+        config.config_path = Some(filename.to_owned());
+
+        Ok(config)
     }
 
     /// Check if there are any plugin are enabled with servers
@@ -1683,6 +1837,21 @@ impl Config {
                     None,
                 );
                 return Err(err);
+            }
+
+            // Balancer related checks
+            if let Some(rtt) = self.balancer.max_server_rtt {
+                if rtt.as_secs() == 0 {
+                    let err = Error::new(ErrorKind::Invalid, "balancer.max_server_rtt must be > 0", None);
+                    return Err(err);
+                }
+            }
+
+            if let Some(intv) = self.balancer.check_interval {
+                if intv.as_secs() == 0 {
+                    let err = Error::new(ErrorKind::Invalid, "balancer.check_interval must be > 0", None);
+                    return Err(err);
+                }
             }
         }
 
@@ -2025,6 +2194,23 @@ impl fmt::Display for Config {
 
         if self.ipv6_first {
             jconf.ipv6_first = Some(self.ipv6_first);
+        }
+
+        // Security
+        if self.security.replay_attack.policy != ReplayAttackPolicy::default() {
+            jconf.security = Some(SSSecurityConfig {
+                replay_attack: Some(SSSecurityReplayAttackConfig {
+                    policy: Some(self.security.replay_attack.policy.to_string()),
+                }),
+            });
+        }
+
+        // Balancer
+        if self.balancer.max_server_rtt.is_some() || self.balancer.check_interval.is_some() {
+            jconf.balancer = Some(SSBalancerConfig {
+                max_server_rtt: self.balancer.max_server_rtt.as_ref().map(Duration::as_secs),
+                check_interval: self.balancer.check_interval.as_ref().map(Duration::as_secs),
+            });
         }
 
         write!(f, "{}", json5::to_string(&jconf).unwrap())

@@ -29,6 +29,12 @@ shadowsocks is a fast tunnel proxy that helps you bypass firewalls.
 | [**shadowsocks-service**](https://crates.io/crates/shadowsocks-service) | [![crates.io](https://img.shields.io/crates/v/shadowsocks-service.svg)](https://crates.io/crates/shadowsocks-service) [![docs.rs](https://img.shields.io/docsrs/shadowsocks-service)](https://docs.rs/shadowsocks-service) Services for serving shadowsocks |
 | [**shadowsocks-rust**](https://crates.io/crates/shadowsocks-rust)       | [![crates.io](https://img.shields.io/crates/v/shadowsocks-rust.svg)](https://crates.io/crates/shadowsocks-rust) Binaries running common shadowsocks services                                                                                                |
 
+Related Projects:
+
+- [spyophobia/shadowsocks-gtk-rs](https://github.com/spyophobia/shadowsocks-gtk-rs) A GUI on Linux for `sslocal` using GTK, [discussion](https://github.com/shadowsocks/shadowsocks-rust/issues/664)
+- [honwen/openwrt-shadowsocks-rust](https://github.com/honwen/openwrt-shadowsocks-rust) OpenWRT solution for `sslocal`, [discussion](https://github.com/honwen/openwrt-shadowsocks-rust)
+- [cg31/shadowsocks-windows-gui-rust](https://github.com/cg31/shadowsocks-windows-gui-rust) Windows GUI client, [discussion](https://github.com/shadowsocks/shadowsocks-rust/issues/375)
+
 ## Build & Install
 
 ### Optional Features
@@ -564,7 +570,16 @@ Example configuration:
     "nofile": 10240,
 
     // Try to resolve domain name to IPv6 (AAAA) addresses first
-    "ipv6_first": false
+    "ipv6_first": false,
+
+    // Balancer customization
+    "balancer": {
+        // MAX Round-Trip-Time (RTT) of servers
+        // The timeout seconds of each individual checks
+        "max_server_rtt": 5,
+        // Interval seconds between each check
+        "check_interval": 10,
+    }
 }
 ```
 

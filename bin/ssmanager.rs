@@ -50,6 +50,7 @@ fn main() {
                     Servers defined will be created when process is started.")
 
             (@arg OUTBOUND_BIND_ADDR: -b --("outbound-bind-addr") +takes_value alias("bind-addr") {validator::validate_ip_addr} "Bind address, outbound socket will bind this address")
+            (@arg OUTBOUND_BIND_INTERFACE: --("outbound-bind-interface") +takes_value "Set SO_BINDTODEVICE / IP_BOUND_IF / IP_UNICAST_IF option for outbound socket")
             (@arg SERVER_HOST: -s --("server-host") +takes_value "Host name or IP address of your remote server")
 
             (@arg MANAGER_ADDR: --("manager-addr") +takes_value alias("manager-address") {validator::validate_manager_addr} "ShadowSocks Manager (ssmgr) address, could be ip:port, domain:port or /path/to/unix.sock")
@@ -89,6 +90,9 @@ fn main() {
             app = clap_app!(@app (app)
                 (@arg DAEMONIZE: -d --("daemonize") "Daemonize")
                 (@arg DAEMONIZE_PID_PATH: --("daemonize-pid") +takes_value "File path to store daemonized process's PID")
+
+                (@arg MANAGER_SERVER_MODE: --("manager-server-mode") +takes_value possible_values(&["builtin", "standalone"]) "Servers that running in builtin or standalone mode")
+                (@arg MANAGER_SERVER_WORKING_DIRECTORY: --("manager-server-working-directory") +takes_value "Folder for putting servers' configuration and pid files, default is current directory")
             );
         }
 
@@ -102,15 +106,7 @@ fn main() {
         #[cfg(any(target_os = "linux", target_os = "android"))]
         {
             app = clap_app!(@app (app)
-                (@arg OUTBOUND_BIND_INTERFACE: --("outbound-bind-interface") +takes_value "Set SO_BINDTODEVICE option for outbound socket")
                 (@arg OUTBOUND_FWMARK: --("outbound-fwmark") +takes_value {validator::validate_u32} "Set SO_MARK option for outbound socket")
-            );
-        }
-
-        #[cfg(any(target_os = "macos", target_os = "ios"))]
-        {
-            app = clap_app!(@app (app)
-                (@arg OUTBOUND_BIND_INTERFACE: --("outbound-bind-interface") +takes_value "Set IP_BOUND_IF option for outbound socket")
             );
         }
 
@@ -177,7 +173,6 @@ fn main() {
             config.outbound_fwmark = Some(mark.parse::<u32>().expect("an unsigned integer for `outbound-fwmark`"));
         }
 
-        #[cfg(any(target_os = "linux", target_os = "android", target_os = "macos", target_os = "ios"))]
         if let Some(iface) = matches.value_of("OUTBOUND_BIND_INTERFACE") {
             config.outbound_bind_interface = Some(iface.to_owned());
         }
@@ -209,6 +204,18 @@ fn main() {
                     plugin_opts: matches.value_of("PLUGIN_OPT").map(ToOwned::to_owned),
                     plugin_args: Vec::new(),
                 });
+            }
+
+            #[cfg(unix)]
+            if let Some(server_mode) = matches.value_of("MANAGER_SERVER_MODE") {
+                manager_config.server_mode = server_mode.parse().expect("manager-server-mode");
+            }
+
+            #[cfg(unix)]
+            if let Some(server_working_directory) = matches.value_of("MANAGER_SERVER_WORKING_DIRECTORY") {
+                manager_config.server_working_directory = server_working_directory
+                    .parse()
+                    .expect("manager-server-working-directory");
             }
         }
 
@@ -288,12 +295,12 @@ fn main() {
         }
 
         #[cfg(unix)]
-        if matches.is_present("DAEMONIZE") {
+        if matches.is_present("DAEMONIZE") || matches.is_present("DAEMONIZE_PID_PATH") {
             use self::common::daemonize;
             daemonize::daemonize(matches.value_of("DAEMONIZE_PID_PATH"));
         }
 
-        info!("shadowsocks {}", VERSION);
+        info!("shadowsocks manager {} build {}", VERSION, common::BUILD_TIME);
 
         #[cfg(feature = "multi-threaded")]
         let mut builder = if matches.is_present("SINGLE_THREADED") {

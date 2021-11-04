@@ -68,6 +68,9 @@ jobs:
       matrix:
         # os: [ubuntu-latest, macos-latest]
         os: [macos-latest]
+        target:
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
     steps:
       - uses: actions/checkout@v2
 
@@ -78,16 +81,25 @@ jobs:
           # echo "::add-path::/usr/local/opt/gnu-tar/libexec/gnubin"
           echo "/usr/local/opt/gnu-tar/libexec/gnubin" >> $GITHUB_PATH
 
-      - name: Install Rust nightly
+      - name: Install Rust Nightly
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
+          toolchain: nightly
+          target: ${{ matrix.target }}
+          default: true
+          override: true
+
+      # https://github.com/actions/virtual-environments/issues/2557#issuecomment-769611326
+      - if: ${{ matrix.target }} == 'aarch64-apple-darwin'
+        run: |
+          sudo xcode-select -s /Applications/Xcode_12.4.app &&
+          sudo rm -Rf /Library/Developer/CommandLineTools/SDKs/*
 
       - name: Build release
         shell: bash
         run: |
-          cd build
-          ./build-host-release
+          ./build/build-host-release -t ${{ matrix.target }}
 
       - name: Upload Github Assets
         uses: softprops/action-gh-release@v1
@@ -105,15 +117,17 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: Install Rust nightly
+      - name: Install Rust Nightly
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
+          toolchain: nightly
+          default: true
+          override: true
 
       - name: Build release
         run: |
-          cd build
-          pwsh build-host-release.ps1
+          pwsh ./build/build-host-release.ps1
 
       - name: Upload Github Assets
         uses: softprops/action-gh-release@v1
