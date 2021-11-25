@@ -1,6 +1,6 @@
 [package]
 name = "shadowsocks-service"
-version = "1.12.1"
+version = "1.12.2"
 authors = ["Shadowsocks Contributors"]
 description = "shadowsocks is a fast tunnel proxy that helps you bypass firewalls."
 repository = "https://github.com/shadowsocks/shadowsocks-rust"
@@ -101,7 +101,7 @@ async-trait = "0.1"
 socket2 = { version = "0.4", features = ["all"] }
 libc = "0.2"
 
-hyper = { version = "0.14.14", optional = true, features = ["full"] }
+hyper = { version = "0.14.15", optional = true, features = ["full"] }
 tower = { version = "0.4", optional = true }
 
 trust-dns-resolver = { version = "0.20.3", optional = true, features = ["serde-config"] }
