@@ -1,6 +1,6 @@
 [package]
 name = "shadowsocks-service"
-version = "1.12.4"
+version = "1.13.0"
 authors = ["Shadowsocks Contributors"]
 description = "shadowsocks is a fast tunnel proxy that helps you bypass firewalls."
 repository = "https://github.com/shadowsocks/shadowsocks-rust"
@@ -56,7 +56,7 @@ local-tunnel = ["local"]
 # Enable socks4 protocol for sslocal
 local-socks4 = ["local"]
 # Enable Tun interface protocol for sslocal
-local-tun = ["local", "etherparse", "tun", "rand"]
+local-tun = ["local", "etherparse", "tun", "rand", "smoltcp", "parking_lot"]
 
 # Enable Stream Cipher Protocol
 # WARN: Stream Cipher Protocol is proved to be insecure
@@ -69,7 +69,14 @@ stream-cipher = ["shadowsocks/stream-cipher"]
 aead-cipher-extra = ["shadowsocks/aead-cipher-extra"]
 
 # Enable detection against replay attack
-replay-attack-detect = ["shadowsocks/replay-attack-detect"]
+security-replay-attack-detect = ["shadowsocks/security-replay-attack-detect"]
+# Enable IV printable prefix
+security-iv-printable-prefix = ["shadowsocks/security-iv-printable-prefix"]
+
+# Enable ARMv8 related optimizations
+armv8 = ["shadowsocks/armv8"]
+# Enable NEON releated optimizations
+neon = ["shadowsocks/neon"]
 
 [dependencies]
 log = "0.4"
@@ -88,6 +95,7 @@ bytes = "1.0"
 byte_string = "1.0"
 byteorder = "1.3"
 rand = { version = "0.8", optional = true }
+parking_lot = { version = "0.11", optional = true }
 
 futures = "0.3"
 tokio = { version = "1.5", features = ["io-util", "macros", "net", "parking_lot", "rt", "sync", "time"] }
@@ -113,11 +121,12 @@ regex = "1.4"
 
 tun = { version = "0.5.3", optional = true, features = ["async"] }
 etherparse = { version = "0.10", optional = true }
+smoltcp = { version = "0.8", optional = true, features = [] }
 
 serde = { version = "1.0", features = ["derive"] }
 json5 = "0.4"
 
-shadowsocks = { version = "1.12.3", path = "../shadowsocks" }
+shadowsocks = { version = "1.13.0", path = "../shadowsocks" }
 
 # Just for the ioctl call macro
 [target.'cfg(any(target_os = "macos", target_os = "ios", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]

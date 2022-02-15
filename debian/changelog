@@ -1,3 +1,29 @@
+shadowsocks-rust (1.13.0) unstable; urgency=medium
+
+  ## Features
+
+  - #706 `balancer.check_best_interval` could let ping balancer to ping only the choosen best server in this interval
+    - Recommended: Set a shorter interval in `balancer.check_best_interval` than `balancer.check_interval` to check much frequently the best server.
+    - `balancer.check_interval` controls the interval of checking all the available servers
+    - When server start, the "check best" strategy starts after it receives enough data for estimating all servers' scores
+  - #744 Refactored `local-tun`, using `smoltcp` as a user-space network stack
+
+  ## Miscelleneous
+
+  - Upgrade [`clap`](https://crates.io/crates/clap) (the command-line argument handling library) to v3.0
+  - #739 Support K8S deployment
+  - [shadowsocks-crypto](https://github.com/shadowsocks/shadowsocks-crypto) switch underlying encryption library to [RustCrypto](https://github.com/RustCrypto)
+    - Able to build with stable Rust
+    - Build for target `aarch64` with nightly, features `"armv8 neon"` should be enabled for hardware acceleration.
+
+shadowsocks-rust (1.12.5) unstable; urgency=medium
+
+  ## Bug Fixes
+
+  - #725 High CPU consumption on Linux Kernel < 4.11 when TCP Fast Open is enabled.
+
+ -- ty <zonyitoo@gmail.com>  Fri, 17 Dec 2021 00:13:26 +0800
+  
 shadowsocks-rust (1.12.4) unstable; urgency=medium
 
   ## Features
@@ -17,6 +43,8 @@ shadowsocks-rust (1.12.4) unstable; urgency=medium
 
   - Deprecating `SS_LOG_VERBOSE_LEVEL` and `SS_LOG_WITHOUT_TIME` (introduced in [v1.12.3](https://github.com/shadowsocks/shadowsocks-rust/releases/tag/v1.12.3)) in flavor of configuring in the configuration file
 
+ -- ty <zonyitoo@gmail.com>  Sun, 28 Nov 2021 15:01:54 +0800
+
 shadowsocks-rust (1.12.3) unstable; urgency=medium
 
   ## Features
@@ -30,6 +58,8 @@ shadowsocks-rust (1.12.3) unstable; urgency=medium
     - Server created from command line argument without `--password` will try to read it from TTY
     - Servers' `"password"` field or `--password` option support `${VAR_NAME}` format to read password from environment variable `VAR_NAME`
 
+ -- ty <zonyitoo@gmail.com>  Fri, 26 Nov 2021 00:12:13 +0800
+
 shadowsocks-rust (1.12.2) unstable; urgency=medium
 
   ## BUG Fixes
@@ -39,6 +69,8 @@ shadowsocks-rust (1.12.2) unstable; urgency=medium
   ## Miscellaneous
 
   - Removed direct dependency to [`mio`](https://crates.io/crates/mio), sending file descriptors through UDS now with [`sendfd`](https://crates.io/crates/sendfd).
+
+ -- ty <zonyitoo@gmail.com>  Tue, 16 Nov 00:11:44 2021 +0800
 
 shadowsocks-rust (1.12.1) unstable; urgency=medium
 
@@ -50,6 +82,8 @@ shadowsocks-rust (1.12.1) unstable; urgency=medium
 
     - #674 MIPS targets in pre-built releases binaries will be compressed by `upx`
     - #670 Servers created by command line options in `ssserver` will have mode `tcp_only`
+
+ -- ty <zonyitoo@gmail.com>  Tue, 9 Nov 2021 23:27:48 +0800
 
 shadowsocks-rust (1.12.0) unstable; urgency=medium
 
@@ -80,6 +114,8 @@ shadowsocks-rust (1.12.0) unstable; urgency=medium
   - #596 Support Snapcraft https://snapcraft.io/shadowsocks-rust
   - TFO on Linux queue length set to 1024 to match backlogs
   - Completely remove Replay Attack Protection with Ping-Pong bloom filter in default build configuration
+
+ -- ty <zonyitoo@gmail.com>  Tue, 2 Nov 2021 12:52:17 +0800
 
 shadowsocks-rust (1.11.2) unstable; urgency=medium
 

@@ -75,12 +75,6 @@ This project uses system (libc) memory allocator (Rust's default). But it also a
 Install from [crates.io](https://crates.io/crates/shadowsocks-rust):
 
 ```bash
-# Set default toolchain to nightly
-rustup default nightly
-# RECOMMEND: Check the rust-toolchain file in the project root and use the recommended nightly version
-# For example:
-# rustup default nightly-2021-06-03
-
 # Install from crates.io
 cargo install shadowsocks-rust
 ```
@@ -134,6 +128,64 @@ docker run --name ssserver-rust \
   -p 8388:8388/udp \
   -v /path/to/config.json:/etc/shadowsocks-rust/config.json \
   -dit ghcr.io/shadowsocks/ssserver-rust:latest
+```
+
+### **Deploy to Kubernetes**
+
+This project provided yaml manifests for deploying to Kubernetes.
+
+You can leverage k8s Service to expose traffic outside, like LoadBalancer or NodePort which gains more fine-grained compared with fixed host or port.
+
+For a more interesting use case, you can use a Ingress(Istio, nginx, etc.) which routes the matched traffic to shadowsocks along with the real web service.
+
+#### Using `kubectl`
+
+`kubectl apply -f https://github.com/shadowsocks/shadowsocks-rust/raw/master/k8s/shadowsocks-rust.yaml`
+
+You can change the config via editing the ConfigMap named `shadowsocks-rust`.
+
+For more fine-grained control, use `helm`.
+
+#### Using `helm`
+
+`helm install my-release k8s/chart -f my-values.yaml`
+
+Below is the common default values you can change:
+
+```yaml
+# This is the shadowsocks config which will be mount to /etc/shadowocks-rust.
+# You can put arbitrary yaml here, and it will be translated to json before mounting.
+servers:
+- server: "::"
+  server_port: 8388
+  service_port: 80 # the k8s service port, default to server_port
+  password: mypassword
+  method: aes-256-gcm
+  fast_open: true
+  mode: tcp_and_udp
+  # plugin: v2ray-plugin
+  # plugin_opts: server;tls;host=github.com
+
+# Whether to download v2ray and xray plugin.
+downloadPlugins: false
+
+# Name of the ConfigMap with config.json configuration for shadowsocks-rust. 
+configMapName: ""
+
+service:
+  # Change to LoadBalancer if you are behind a cloud provider like aws, gce, or tke.
+  type: ClusterIP
+
+# Bind shadowsocks port port to host, i.e., we can use host:port to access shawdowsocks server.
+hostPort: false
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/shadowsocks/ssserver-rust
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "latest"
 ```
 
 ### **Build from source**
@@ -332,15 +384,6 @@ sslocal --protocol tun -s "[::1]:8388" -m "aes-256-gcm" -k "hello-kitty" --outbo
 ```
 
 It will create a Tun interface with address `10.255.0.1` and netmask `255.255.255.0`.
-
-(OPTIONAL) macOS requires adding a route entry to redirect packets that destinated to `10.155.0.1` (the address of the Tun interface) to the Tun interface itself.
-
-```bash
-# 10.255.0.1 address
-# 255.255.255.0 netmask
-# utun8 tun's interface name
-route add -net 10.255.0.1 -netmask 255.255.255.0 -interface utun8
-```
 
 ### Server
 
@@ -591,6 +634,9 @@ Example configuration:
         "max_server_rtt": 5,
         // Interval seconds between each check
         "check_interval": 10,
+        // Interval seconds between each check for the best server
+        // Optional. Specify to enable shorter checking interval for the best server only.
+        "check_best_interval": 5
     },
 
     // Service configurations
@@ -743,7 +789,7 @@ It supports the following features:
 - [x] Improved logging format (waiting for the new official log crate)
 - [x] Support more ciphers without depending on `libcrypto` (waiting for an acceptable Rust crypto lib implementation)
 - [x] Windows support.
-- [ ] Build with stable `rustc` (blocking by `crypto2`).
+- [x] Build with stable `rustc` <del>(blocking by `crypto2`)</del>.
 - [x] Support HTTP Proxy protocol
 - [x] AEAD ciphers. (proposed in [SIP004](https://github.com/shadowsocks/shadowsocks-org/issues/30), still under discussion)
 - [x] Choose server based on delay #152

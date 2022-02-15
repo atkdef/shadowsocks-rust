@@ -1,6 +1,6 @@
 [package]
 name = "shadowsocks"
-version = "1.12.3"
+version = "1.13.0"
 authors = ["Shadowsocks Contributors"]
 description = "shadowsocks is a fast tunnel proxy that helps you bypass firewalls."
 repository = "https://github.com/shadowsocks/shadowsocks-rust"
@@ -32,7 +32,14 @@ stream-cipher = ["shadowsocks-crypto/v1-stream"]
 aead-cipher-extra = ["shadowsocks-crypto/v1-aead-extra"]
 
 # Enable detection against replay attack
-replay-attack-detect = ["bloomfilter", "spin"]
+security-replay-attack-detect = ["bloomfilter", "spin"]
+# Enable IV printable prefix
+security-iv-printable-prefix = ["rand"]
+
+# Enable ARMv8 related optimizations
+armv8 = ["shadowsocks-crypto/armv8"]
+# Enable NEON releated optimizations
+neon = ["shadowsocks-crypto/neon"]
 
 [dependencies]
 log = "0.4"
@@ -48,6 +55,7 @@ spin = { version = "0.9", features = ["std"], optional = true }
 pin-project = "1.0"
 bloomfilter = { version = "1.0.8", optional = true }
 thiserror = "1.0"
+rand = { version = "0.8", optional = true }
 
 serde = { version = "1.0", features = ["derive"] }
 serde_urlencoded = "0.7"
@@ -65,10 +73,10 @@ arc-swap = { version = "1.3", optional = true }
 notify = { version = "5.0.0-pre.13", optional = true }
 
 [target.'cfg(any(target_arch = "x86_64", target_arch = "aarch64"))'.dependencies]
-shadowsocks-crypto = { version = "0.2", features = ["ring"] }
+shadowsocks-crypto = { version = "0.3", features = ["ring"] }
 
 [target.'cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))'.dependencies]
-shadowsocks-crypto = { version = "0.2", features = [] }
+shadowsocks-crypto = { version = "0.3", features = [] }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["mswsock", "winsock2", "netioapi"] }
