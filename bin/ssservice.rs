@@ -9,11 +9,11 @@
 
 use std::{env, path::Path};
 
-use clap::{App, AppSettings};
+use clap::Command;
 use shadowsocks_rust::service::{local, manager, server};
 
 fn main() {
-    let app = App::new("shadowsocks")
+    let app = Command::new("shadowsocks")
         .version(shadowsocks_rust::VERSION)
         .about("A fast tunnel proxy that helps you bypass firewalls. (https://shadowsocks.org)");
 
@@ -22,19 +22,19 @@ fn main() {
         if let Some(program_name) = Path::new(&program_path).file_name() {
             match program_name.to_str() {
                 Some("sslocal") => return local::main(&local::define_command_line_options(app).get_matches()),
-                Some("ssserver") => return server::main(&local::define_command_line_options(app).get_matches()),
-                Some("ssmanager") => return manager::main(&local::define_command_line_options(app).get_matches()),
+                Some("ssserver") => return server::main(&server::define_command_line_options(app).get_matches()),
+                Some("ssmanager") => return manager::main(&manager::define_command_line_options(app).get_matches()),
                 _ => {}
             }
         }
     }
 
     let matches = app
-        .setting(AppSettings::SubcommandRequired)
-        .subcommand(local::define_command_line_options(App::new("local")).about("Shadowsocks Local service"))
-        .subcommand(server::define_command_line_options(App::new("server")).about("Shadowsocks Server service"))
+        .subcommand_required(true)
+        .subcommand(local::define_command_line_options(Command::new("local")).about("Shadowsocks Local service"))
+        .subcommand(server::define_command_line_options(Command::new("server")).about("Shadowsocks Server service"))
         .subcommand(
-            manager::define_command_line_options(App::new("manager")).about("Shadowsocks Server Manager service"),
+            manager::define_command_line_options(Command::new("manager")).about("Shadowsocks Server Manager service"),
         )
         .get_matches();
 
